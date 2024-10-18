@@ -22,6 +22,7 @@ suspend fun rssElements(urlString: String): List<RssItem> {
         var title: String? = null
         var pubDate: String? = null
         var imageUrl: String? = null
+        var description: String? = null
         val siteName = URL(urlString).host
         var link: String? = null
 
@@ -36,14 +37,17 @@ suspend fun rssElements(urlString: String): List<RssItem> {
                             tagName.equals("title", ignoreCase = true) -> title = xpp.nextText()
                             tagName.equals("pubDate", ignoreCase = true) -> pubDate = xpp.nextText()
                             tagName.equals("link", ignoreCase = true) -> link = xpp.nextText()
-                            tagName.equals("media:content", ignoreCase = true) -> {
-                                imageUrl = xpp.getAttributeValue(null, "url")
-                            }
+                            tagName.equals("description", ignoreCase = true) -> description = xpp.nextText()
                         }
                     }
                 }
                 XmlPullParser.END_TAG -> {
                     if (tagName.equals("item", ignoreCase = true)) {
+                        // Si no encontramos una imagen en <media:content>, intentamos extraerla de la descripción
+                        if (imageUrl == null && description != null) {
+                            imageUrl = extractImageUrlFromDescription(description)
+                        }
+
                         if (title != null && link != null) {
                             items.add(RssItem(title, pubDate, link, imageUrl, siteName))
                         }
@@ -52,6 +56,7 @@ suspend fun rssElements(urlString: String): List<RssItem> {
                         pubDate = null
                         link = null
                         imageUrl = null
+                        description = null
                     }
                 }
             }
@@ -62,6 +67,7 @@ suspend fun rssElements(urlString: String): List<RssItem> {
     }
     return items
 }
+
 
 fun formatPubDate(pubDate: String): String {
     val date = parseDate(pubDate)
@@ -81,4 +87,10 @@ fun parseDate(dateStr: String): Date? {
         e.printStackTrace()
         null
     }
+}
+
+fun extractImageUrlFromDescription(description: String): String? {
+    val imgTagPattern = "<img[^>]+src\\s*=\\s*['\"]([^'\"]+)['\"]".toRegex()
+    val matchResult = imgTagPattern.find(description)
+    return matchResult?.groups?.get(1)?.value
 }
